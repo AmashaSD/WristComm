@@ -1,1 +1,292 @@
-https://AmashaSD.github.io/WristComm
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wrist Communicator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f0f1a;
+      color: white;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    h1 { color: #a78bfa; text-align: center; margin-bottom: 4px; padding-top: 16px; }
+    .subtitle { text-align: center; color: #666; font-size: 0.85rem; margin-bottom: 24px; }
+    #status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      font-size: 0.85rem;
+      color: #888;
+    }
+    #status-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #f97316;
+      display: inline-block;
+      animation: pulse 1.5s infinite;
+    }
+    #status-dot.live { background: #22c55e; animation: none; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    #start-btn {
+      display: block;
+      margin: 0 auto 24px;
+      padding: 14px 36px;
+      font-size: 1rem;
+      background: #a78bfa;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+    }
+    #start-btn.hidden { display: none; }
+    #key-display {
+      text-align: center;
+      color: #a78bfa;
+      font-size: 0.85rem;
+      margin-bottom: 8px;
+      min-height: 18px;
+    }
+    #message-box {
+      background: #1e1e2e;
+      border: 2px solid #a78bfa;
+      border-radius: 16px;
+      padding: 30px;
+      font-size: 1.5rem;
+      min-height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    #speaking-indicator {
+      text-align: center;
+      font-size: 0.82rem;
+      color: #a78bfa;
+      height: 18px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      margin-bottom: 20px;
+    }
+    #speaking-indicator.visible { opacity: 1; }
+    .gender-card {
+      background: #1e1e2e;
+      border: 1px solid #333;
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+    .section-label {
+      font-size: 0.9rem;
+      color: #a78bfa;
+      font-weight: bold;
+      margin-bottom: 14px;
+    }
+    .gender-buttons { display: flex; gap: 12px; }
+    .gender-btn {
+      flex: 1;
+      padding: 14px 10px;
+      border-radius: 12px;
+      border: 2px solid #333;
+      background: #0f0f1a;
+      color: #aaa;
+      font-size: 1rem;
+      cursor: pointer;
+      text-align: center;
+    }
+    .gender-btn .g-icon { font-size: 1.6rem; display: block; margin-bottom: 4px; }
+    .gender-btn.selected { border-color: #a78bfa; background: #2a1e4e; color: white; }
+    .gender-hint { font-size: 0.75rem; color: #555; margin-top: 10px; text-align: center; }
+    #history {
+      background: #1e1e2e;
+      border: 1px solid #333;
+      border-radius: 14px;
+      padding: 16px;
+    }
+    .history-title { color: #a78bfa; font-size: 0.9rem; font-weight: bold; margin-bottom: 10px; }
+    .history-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #2a2a3e;
+      font-size: 0.85rem;
+    }
+    .history-item:last-child { border-bottom: none; }
+    .history-key { color: #a78bfa; font-weight: bold; min-width: 50px; }
+    .history-phrase { color: #ccc; flex: 1; margin: 0 10px; }
+    .history-time { color: #555; font-size: 0.75rem; }
+    #no-history { color: #555; text-align: center; font-size: 0.85rem; padding: 10px 0; }
+  </style>
+</head>
+<body>
+  <h1>&#9000; Wrist Communicator</h1>
+  <p class="subtitle">IoT Communication Aid Device — AmashaSD</p>
+
+  <div id="status-bar">
+    <span id="status-dot"></span>
+    <span id="status-text">Waiting for device...</span>
+  </div>
+
+  <button id="start-btn" onclick="unlockAudio()">&#128264; Tap to Enable Voice</button>
+
+  <div id="key-display">—</div>
+  <div id="message-box">Waiting for keypress...</div>
+  <div id="speaking-indicator">&#128264; Speaking...</div>
+
+  <div class="gender-card">
+    <div class="section-label">Voice</div>
+    <div class="gender-buttons">
+      <button class="gender-btn" id="btn-female" onclick="selectGender('female')">
+        <span class="g-icon">&#9792;</span>Female
+      </button>
+      <button class="gender-btn" id="btn-male" onclick="selectGender('male')">
+        <span class="g-icon">&#9794;</span>Male
+      </button>
+    </div>
+    <div class="gender-hint" id="voice-hint">Select voice then tap Enable Voice</div>
+  </div>
+
+  <div id="history">
+    <div class="history-title">&#128203; Message History</div>
+    <div id="history-list"><div id="no-history">No messages yet</div></div>
+  </div>
+
+  <script>
+    // ── Firebase config ──────────────────────────────
+    var FIREBASE_URL = "https://wristcomm-default-rtdb.firebaseio.com/message.json";
+    var lastTimestamp = 0;
+    var started = false;
+    var isSpeaking = false;
+    var selectedGender = localStorage.getItem('wristGender') || '';
+    var historyItems = [];
+
+    // ── Voice ────────────────────────────────────────
+    function findVoice(gender) {
+      var voices = window.speechSynthesis.getVoices();
+      var femaleHints = ['female','woman','girl','zira','samantha','victoria','karen','moira','fiona','veena','susan','catherine'];
+      var maleHints   = ['male','man','boy','david','mark','daniel','alex','fred','jorge','thomas','james'];
+      var hints    = gender === 'female' ? femaleHints : maleHints;
+      var opposite = gender === 'female' ? maleHints : femaleHints;
+      var match = voices.find(function(v){ var n=v.name.toLowerCase(); return v.lang.startsWith('en') && hints.some(function(h){return n.includes(h);}); });
+      if (match) return match;
+      match = voices.find(function(v){ var n=v.name.toLowerCase(); return v.lang.startsWith('en') && !opposite.some(function(h){return n.includes(h);}); });
+      if (match) return match;
+      return voices.find(function(v){ return v.lang.startsWith('en'); }) || null;
+    }
+
+    function selectGender(gender) {
+      selectedGender = gender;
+      localStorage.setItem('wristGender', gender);
+      document.getElementById('btn-female').classList.toggle('selected', gender === 'female');
+      document.getElementById('btn-male').classList.toggle('selected', gender === 'male');
+      var v = findVoice(gender);
+      document.getElementById('voice-hint').textContent = v ? 'Using: ' + v.name : 'No matching voice found';
+      if (v) {
+        window.speechSynthesis.cancel();
+        var u = new SpeechSynthesisUtterance('Hello this is my voice.');
+        u.voice = v; u.lang = v.lang; u.rate = 0.85;
+        window.speechSynthesis.speak(u);
+      }
+    }
+
+    function restoreGenderUI() {
+      if (!selectedGender) return;
+      document.getElementById('btn-female').classList.toggle('selected', selectedGender === 'female');
+      document.getElementById('btn-male').classList.toggle('selected', selectedGender === 'male');
+      var v = findVoice(selectedGender);
+      document.getElementById('voice-hint').textContent = v ? 'Using: ' + v.name : 'No matching voice found';
+    }
+
+    function unlockAudio() {
+      var u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0;
+      window.speechSynthesis.speak(u);
+      started = true;
+      document.getElementById('start-btn').classList.add('hidden');
+    }
+
+    function speak(text) {
+      if (!started || isSpeaking) return;
+      isSpeaking = true;
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(text);
+      if (selectedGender) {
+        var v = findVoice(selectedGender);
+        if (v) { u.voice = v; u.lang = v.lang; }
+      } else {
+        var voices = window.speechSynthesis.getVoices();
+        var en = voices.find(function(v){ return v.lang.startsWith('en'); });
+        if (en) { u.voice = en; u.lang = en.lang; }
+      }
+      u.rate = 0.85; u.volume = 1.0;
+      u.onend = function(){ isSpeaking = false; document.getElementById('speaking-indicator').classList.remove('visible'); };
+      u.onerror = function(){ isSpeaking = false; document.getElementById('speaking-indicator').classList.remove('visible'); };
+      window.speechSynthesis.speak(u);
+      document.getElementById('speaking-indicator').classList.add('visible');
+    }
+
+    // ── History ──────────────────────────────────────
+    function addToHistory(key, phrase) {
+      var now = new Date();
+      var timeStr = now.getHours().toString().padStart(2,'0') + ':' +
+                    now.getMinutes().toString().padStart(2,'0') + ':' +
+                    now.getSeconds().toString().padStart(2,'0');
+      historyItems.unshift({ key: key, phrase: phrase, time: timeStr });
+      if (historyItems.length > 10) historyItems.pop();
+
+      var list = document.getElementById('history-list');
+      list.innerHTML = '';
+      historyItems.forEach(function(item) {
+        var div = document.createElement('div');
+        div.className = 'history-item';
+        div.innerHTML = '<span class="history-key">' + item.key + '</span>' +
+                        '<span class="history-phrase">' + item.phrase + '</span>' +
+                        '<span class="history-time">' + item.time + '</span>';
+        list.appendChild(div);
+      });
+    }
+
+    // ── Firebase polling ─────────────────────────────
+    function pollFirebase() {
+      fetch(FIREBASE_URL)
+        .then(function(res){ return res.json(); })
+        .then(function(data) {
+          if (!data) return;
+          var ts = data.timestamp || 0;
+          if (ts > lastTimestamp) {
+            lastTimestamp = ts;
+            var key    = data.key    || '?';
+            var phrase = data.phrase || 'Unknown';
+
+            document.getElementById('key-display').textContent = 'Key pressed: ' + key;
+            document.getElementById('message-box').textContent = phrase;
+            document.getElementById('status-dot').classList.add('live');
+            document.getElementById('status-text').textContent = 'Device online — last update just now';
+
+            addToHistory(key, phrase);
+            speak(phrase);
+          }
+        })
+        .catch(function(err){
+          document.getElementById('status-dot').classList.remove('live');
+          document.getElementById('status-text').textContent = 'Waiting for device...';
+        });
+    }
+
+    // ── Init ─────────────────────────────────────────
+    window.speechSynthesis.onvoiceschanged = function(){ restoreGenderUI(); };
+    restoreGenderUI();
+
+    // Poll Firebase every 2 seconds
+    pollFirebase();
+    setInterval(pollFirebase, 2000);
+  </script>
+</body>
+</html>
